@@ -1,0 +1,309 @@
+# This python program gives the user key facts and figures about S&P 500 companies using the Yahoo Finance database. The user will only need to input the stock ticker to access  relevant information. Additionally, it will give the user an overview of the S&P 500 index.
+
+# Before running the code for a first time, the program will download the necessary libraries for the code to work (yfinance, schedule, matplotlib, pandas, requests, bs4).
+
+#Start program
+
+import yfinance as yf
+import schedule
+import time
+from datetime import datetime,timedelta
+import matplotlib.pyplot as plt
+import pandas as pd
+
+   
+
+
+
+# The user is welcomed to the program
+print("Welcome to the S&P 500 info board:\n")
+
+# The program fetches the S&P 500 tickers 
+sp500_ticker = "^GSPC"
+
+# The program gets the S&P 500 data and stores them as sp500_data
+snp500_data = yf.Ticker(sp500_ticker)
+
+# Gets the current value of the S&P 500, unless the market is closed. Then it gets the index value from yesterdays closing
+current_price_snp500 = snp500_data.history(period="1d").tail(1)['Close'].iloc[0]
+
+# Prints the current value of the S&P 500 (points), rounded 2 decimal places
+print(f"The S&P 500 currently stands at: {current_price_snp500:.2f} points")
+
+
+
+
+# This function retrieves the 52-week highs and lows of the S&P 500
+def yearly_highlow_snp500():
+    ticker = yf.Ticker("^GSPC")  # Ticker symbol for the S&P 500
+    history = ticker.history(period="1y")   # Fetch historical data for the past year (= 52 weeks)
+    
+    # Get the maximum and minimum values of the 'High' and 'Low' columns
+    high = history["High"].max()
+    low = history["Low"].min()
+    return high, low  # Exits the function and returns the output of the function
+
+
+
+
+# Defines variables to retrieve the 52-week highs and lows
+snp_500_high, snp_500_low = yearly_highlow_snp500()
+
+# A data frame using the pandas library is created
+data = {"52-Week Range": ["52-Week High", "52-Week Low"],
+        "Points": [snp_500_high, snp_500_low]}
+df = pd.DataFrame(data) 
+
+
+
+
+# Print DF (for better visual understanding)
+print("\n") #This is just for the better readability of the output
+print("     52-Week Range   |   Points")
+print("     ----------------|----------")
+for _, row in df.iterrows():
+    metric = row["52-Week Range"]
+    value = row["Points"]
+    print(f"     {metric:<15} |   {value:.2f}") # All the results in the code are rounded to two decimals, hence .2f
+print("\n") #space for better overview
+
+
+
+
+#The overview over S&P 500 is finished, now the code focuses on the desired company
+
+
+
+
+# Download S&P 500 ticker symbols
+import requests
+from bs4 import BeautifulSoup  # The beautiful soup class is imported from the bs4 module
+
+
+
+
+# Defines the function to retrieve the latest list of S&P 500 tickers from Wikipedia and saves them in a file
+def update_tickers_fromsnp500():
+    url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'  # link from Wikipedia
+    response = requests.get(url)  #get method to use the Wikipedia URL
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    table = soup.find('table', {'class': 'wikitable sortable'}) # This allows us to access and work with the contents of that table (table object below)
+    tickers = [] #empty list for all tickers of S&P 500
+#now code iterates trough all tickers and add them to the empty list
+    for row in table.find_all('tr')[1:]:
+        ticker = row.find_all('td')[0].text.strip() # Obtains the ticker symbol from a specific table row in an HTML document
+        tickers.append(ticker)
+
+    with open('sp500_tickers.txt', 'w') as file:
+        file.write('\n'.join(tickers))
+
+
+
+
+# Run the function to update the tickers
+update_tickers_fromsnp500()
+
+# Define variable to check if the tickers are valid
+valid_tickers = open('sp500_tickers.txt').read().splitlines()
+
+# Ask the user to enter a ticker, it does not matter if larger or lower cases
+ticker = input('Please enter the ticker symbol of a S&P 500 company: ').upper()
+
+# Checks the entered ticker if it is in the variable valid_tickers, if entered ticker is not in S&P 500 aks the user to reenter a valid ticker
+while ticker not in valid_tickers:
+    ticker = input('Please enter a valid Ticker: ').upper()
+
+# If ticker is in the S&P 500, program continues with the rest of the program always with exactly that ticker!
+
+print(f"\n\n\nThe company with the ticker {ticker} is in the S&P 500. \n\n\nHere are the key company informations of {ticker}:\n\n")
+
+
+
+
+# Function to get company information such as industry, sector, and employees
+def company_information():
+    info = yf.Ticker(ticker).info  # Ticker symbol for the stock
+    #if no information available, return N/A
+    industry = info.get('industry', 'N/A') 
+    sector = info.get('sector', 'N/A')
+    employees = info.get('fullTimeEmployees', 'N/A')
+    return industry, sector, employees # This is the preparation for the data frame below
+
+# Save the informations in the three variables
+industry, sector, employees = company_information()
+
+
+
+
+# Create a DataFrame with the company information
+data = {"Industry": [industry], "Sector": [sector], "Employees": [employees]}
+df = pd.DataFrame(data)
+
+# Calculate the maximum length for the left and right words in each row for correct representation in table
+max_left_length = max(len("Industry"), len("Sector"), len("Employees"))
+max_right_length = max(len(industry), len(sector), len(str(employees)))
+
+# Calculate the total width for each row and add 3 for spaces between the |
+total_width = max_left_length + max_right_length + 3
+
+# Generate the separator line with the correct length
+separator_line = "     " + "-" * total_width
+
+
+
+
+# Print the table (better visual presenstation than plain text)
+print(f"     {'Industry':<{max_left_length}} | {industry}")
+print(separator_line)
+print(f"     {'Sector':<{max_left_length}} | {sector}")
+print(separator_line)
+print(f"     {'Employees':<{max_left_length}} | {employees:,.0f} \n") #f ormatting comma-number, better readability 
+
+
+
+
+# Function to get the current price of the entered stock ticker
+def current_price():
+    stock_name = yf.Ticker(ticker)
+    current_price = stock_name.history(period="1d").tail(1)['Close'].iloc[0] # checks the data for one day and selects the most recent row. Then it takes the closing price from that row.
+    return current_price
+
+# Define variable w/ current price
+price = current_price()
+if price is not None:
+    price = f"{price:.2f}$" # In USD and rounded to two decimals
+else:
+    price = "not available" #if no price is given in yfinance
+
+
+
+
+# Function to get the dividend yield of the entered stock ticker
+def dividend_yield():
+    stock_dividend = yf.Ticker(ticker)
+    info = stock_dividend.info
+    if 'dividendYield' in info:
+        dividend_yield = info['dividendYield'] # yfinance has information regarding the dividend yield
+        return dividend_yield
+    else:
+        return None #if yfinance has no information or there is no dividend
+
+# Save the variable to get the dividend yield
+dividend_yield = dividend_yield()
+if dividend_yield is not None:
+    dividend_yield = f"{float(dividend_yield)*100:.2f}%" # Is converted to a float (data type that represents real numbers)
+else:
+    dividend_yield= "no dividends" #if yfianance does not have information
+
+
+
+
+# Function to get the daily performance of the entered stock ticker
+def daily_performance():
+    stock_dailyperform = yf.Ticker(ticker)
+    history = stock_dailyperform.history(period="2d")
+    if len(history) >= 2:
+        current_close = history.iloc[-1]['Close'] # value today (close)
+        yesterday_close = history.iloc[-2]['Close'] # value yesterday (close)
+        if pd.notnull(yesterday_close) and pd.notnull(current_close):
+            percent_change = (current_close - yesterday_close) / yesterday_close * 100
+            return percent_change
+    return None
+
+# Define variable to get the daily performance
+performance = daily_performance()
+formatted_performance = f"{performance:.2f}%" # rounded and in %
+if performance is not None:
+    if performance >= 0:
+        colored_performance = '\033[32m' + '+' + formatted_performance + '\033[0m'  # Green color for positive values
+    else:
+        colored_performance = '\033[31m' + formatted_performance + '\033[0m'  # Red color for negative values
+    
+else:
+    colored_performance = "not available" # if yfinance has no information
+
+
+
+
+
+# Function to get the year-to-date performance of the entered stock ticker
+def year_to_date_performance():
+    stock_performance = yf.Ticker(ticker)
+    history = stock_performance.history(period="ytd")
+    if not history.empty:
+        current_date = datetime.now().date() # today
+        start_date = history.index[0].date() # first day of the year
+        days_passed = (current_date - start_date).days
+        start_price = history['Close'][0] # close from the first day of the year
+        current_price = history['Close'][-1] # close from yesterday
+        percent_change = (current_price - start_price) / start_price * 100
+        return percent_change, days_passed # Measures the percentage change and the days passed this year
+    else:
+        return None, None  # If no YTD data is avaiable
+
+# Define variables to get the year-to-date peformance
+performance, days_passed = year_to_date_performance() # sums up the performance and days passed in the new year to date performance
+if performance is not None and days_passed is not None:
+    formatted_performance = f"{performance:.2f}%" # rounds the performance in %
+    if performance >= 0:
+        colored_performance_yrs = '\033[32m' + '+' + formatted_performance + '\033[0m'  # Green color for positive values
+    else:
+        colored_performance_yrs = '\033[31m' + formatted_performance + '\033[0m'  # Red color for negative values
+else:
+    colored_performance_yrs = "not available" #if no information is given on yfinance
+
+
+
+
+# Define function to calculate the P/E ratio of the entered stock ticker
+def pe_ratio():
+    stock_pe_ratio = yf.Ticker(ticker)  # Ticker symbol for the stock
+    info = stock_pe_ratio.info
+    
+    if 'trailingPE' in info:
+        pe_ratio = info['trailingPE']
+        return pe_ratio
+    else:
+        return None # if yfinance has no information
+
+# Define variable to calculate the P/E ratio
+pe_ratio = pe_ratio()
+if pe_ratio is not None: # = it has a value
+    pe_ratio = f"{pe_ratio:.2f}" # rounds it to two decimals
+else:
+    pe_ratio = "not available" #if yfinance has no information
+
+
+
+
+# Now the code has all variables to create the table with the most important informations about the specific stock
+print(f"\n\nThe following table illustrates the most important informations\nabout {ticker}'s share:\n\n")
+# Creates a Data Frame with the informations needed
+data = {"Current stock price": [price], "Dividend yield": [dividend_yield], "Current daily performance": [colored_performance], "Year-to-date performance": [colored_performance_yrs], "Since start of the year": [days_passed], "P/E Ratio": [pe_ratio]}
+df = pd.DataFrame(data)
+
+# Calculate the maximum length for the left and right words in each row
+max_left_length = max(len("Current stock price"), len("Dividend yield"), len("Current daily performance"), len("Year-to-date performance"), len("Since start of the year"), len("P/E Ratio"))
+
+max_right_length = max(len(str(price)), len(str(dividend_yield)), len(str(colored_performance)), len(str(colored_performance_yrs)), len(str(days_passed) + " days"), len(str(pe_ratio)))
+total_width = max_left_length + max_right_length + 3
+
+# Generate the separator line with the correct length
+separator_line = "     " + "-" * total_width
+
+
+
+
+# Prints the table (visual presentation)
+print(f"     {'Current stock price':<{max_left_length}} | {price}")
+print(separator_line)
+print(f"     {'Dividend yield':<{max_left_length}} | {dividend_yield}")
+print(separator_line)
+print(f"     {'Current daily performance':<{max_left_length}} | {colored_performance}")
+print(separator_line)
+print(f"     {'Year-to-date performance':<{max_left_length}} | {colored_performance_yrs}")
+print(separator_line)
+print(f"     {'Since start of the year':<{max_left_length}} | {days_passed} days")
+print(separator_line)
+print(f"     {'P/E Ratio':<{max_left_length}} | {pe_ratio}")
